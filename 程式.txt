@@ -1,0 +1,71 @@
+function onFormSubmit(e) {
+  const formData = e.values.slice(1); // 移除時間戳記
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const formSheet = ss.getSheetByName("拜金表");
+  const product = formData[2]; // 第三欄為「購買商品」
+  const rowIndex = e.range.getRow();
+  const lastCol = formSheet.getLastColumn();
+
+  // 檢查是否已搬移
+  const movedFlag = formSheet.getRange(rowIndex, lastCol).getValue();
+  if (movedFlag === "已搬移") return;
+
+  const newRow = [...formData, '']; // 補空白「特典」欄
+
+  // ✅ 搬資料到 NIJI
+  let summarySheet = ss.getSheetByName("NIJI");
+  if (!summarySheet) {
+    summarySheet = ss.insertSheet("NIJI");
+    summarySheet.appendRow(['跟團日期', '跟團', '購買商品', '金額', '完成狀態', '特典']);
+  }
+  summarySheet.appendRow(newRow);
+
+  // ✅ 標記為已搬移
+  formSheet.getRange(rowIndex, lastCol).setValue("已搬移");
+
+  // ✅ 發送 LINE 通知
+  sendLineNotify(formData);
+}
+
+function sendLineNotify(formData) {
+  const token = PropertiesService.getScriptProperties().getProperty('LINE_TOKEN');
+  const message = `
+📦 有人跟團啦！
+🗓️ 日期：${formData[0]}
+👤 跟團：${formData[1]}
+🛒 商品：
+${formData[2]}
+💰 金額：${formData[3]}
+📌 狀態：${formData[4]}
+  `;
+
+  const url = "https://api.line.me/v2/bot/message/push";
+  const userId = "U0a2790f5c7aa4091ed16fdf265573acf"; // 替換為你自己的使用者 ID
+
+  const payload = {
+    to: userId,
+    messages: [
+      {
+        type: "text",
+        text: message
+      }
+    ]
+  };
+
+  const options = {
+    method: "post",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    },
+    payload: JSON.stringify(payload)
+  };
+
+  UrlFetchApp.fetch(url, options);
+}
+
+// ✅ 測試通知用（不需送出表單）
+function testLineNotify() {
+  const sampleData = ["2025-04-15", "小A", "應援毛巾", "690", "已付款"];
+  sendLineNotify(sampleData);
+}
